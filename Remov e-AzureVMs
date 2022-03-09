@@ -1,0 +1,111 @@
+<#..
+Azure VM Deletion script which perform below tasks-
+1.Remove Azure VM
+2.Remove associated NIC of VM
+3.Remove aasociated disk of VM
+
+Provide the Computer names details in value of ComputerNames Variable.
+..#>
+ 
+ #Initialise the azure vms here
+$ComputerNames = @('','')
+
+$tenantid="<tenant id>"
+$azaccount=Connect-AzAccount -TenantId $tenantid
+Set-AzContext -Subscription "<subscription id>"
+
+#Resource Group
+$locationName = "<resource group location>"
+$ResourceGroupName = <resource group name>"
+
+if($ComputerNames){
+#Iterating each Vm in Loop
+foreach($ComputerName in $ComputerNames)
+{
+
+Write-Host "Connected VM - $ComputerName"
+
+########finding azure vm######
+try{
+$vm=Get-AzVM -ResourceGroupName $ResourceGroupName -Name $ComputerName -ErrorAction Stop
+$vmname=$vm.Name
+Write-Host "VM Details are shown below:-" -ForegroundColor Green
+$vm
+
+}
+catch
+{
+$excp=$($_.Exception.Message)
+Write-Error "No VM Found for the name - $ComputerName. skipping and continue to next VM .Exception Result : $excp"
+continue
+}
+
+if($vm.count -eq 1){
+#find diskname of the vm
+$diskname=$vm.StorageProfile.OsDisk | select -ExpandProperty Name
+
+Write-Host "DIsk Of VM-$vmname is $diskname" -ForegroundColor Green
+
+#find network interface
+$nicurl=$vm.NetworkProfile.NetworkInterfaces.Id
+$nicname=$nicurl.Split('/')[-1]
+
+Write-Host "NIC Of VM-$vmname is $nicname" -ForegroundColor Green
+
+
+#Remove Azure VM
+try{
+Write-Host "Removing Azure VM - $vmname" -ForegroundColor Yellow
+Remove-AzVM -Name $vmname -ResourceGroupName $ResourceGroupName -Force -ErrorAction Stop
+Write-Host "Azure VM - $vmname is removed succesffully" -ForegroundColor Green
+}
+catch{
+$excp=$($_.Exception.Message)
+Write-Error "Exception Result : $excp"
+Write-host "Failed to remove the azure vm - $vmname." -ForegroundColor Red
+continue
+}
+
+#Remove VM Disk
+try{
+Write-Host "Removing Azure VM Disk - $diskname" -ForegroundColor Yellow -ErrorAction Stop
+Remove-AzDisk -DiskName $diskname -ResourceGroupName $ResourceGroupName -Force
+Write-Host "Azure VM Disk - $diskname is removed succesffully" -ForegroundColor Green
+}
+catch{
+$excp=$($_.Exception.Message)
+Write-Error "Exception Result : $excp"
+Write-host "Failed to remove the azure vm Disk - $diskname." -ForegroundColor Red
+continue
+}
+
+#remove Azure VM Network Interface Card
+try{
+Write-Host "Removing Azure VM NIC - $nicname" -ForegroundColor Yellow
+Remove-AzNetworkInterface -Name $nicname -ResourceGroupName $ResourceGroupName -Force -ErrorAction Stop
+Write-Host "Azure VM NIC - $nicname is removed succesffully" -ForegroundColor Green
+}
+catch{
+$excp=$($_.Exception.Message)
+Write-Error "Exception Result : $excp"
+Write-host "Failed to remove the azure vm NIC - $nicname." -ForegroundColor Red
+continue
+}
+$vm=$null
+}
+else
+{
+Write-Host "Multiple matching VMs are detected.Hnece cannot delete the VM" -ForegroundColor Red
+}
+
+}
+
+}
+else
+{
+Write-Host "No Input provided for Azure Vms" -ForegroundColor Yellow
+}
+
+
+
+
